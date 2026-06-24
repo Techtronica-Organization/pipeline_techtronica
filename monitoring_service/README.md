@@ -54,6 +54,8 @@ O serviço pode ser parametrizado pelas seguintes variáveis de ambiente:
 | `HISTORICAL_DB_PATH` | Caminho do banco de dados histórico para carga inicial | `../sistema_manutencao.db` |
 | `SIMULATION_INTERVAL_SEC` | Segundos reais correspondentes a 1 hora na simulação | `5.0` (teste) / `3600.0` (tempo real) |
 | `HOSPITAL_ID` | ID do hospital cujos equipamentos serão simulados | `1` |
+| `NUM_HOSPITALS` | Quantidade de hospitais que serão simulados concorrentemente (IDs de 1 a NUM_HOSPITALS) | `10` |
+| `HOSPITAL_IDS` | Lista explícita de IDs de hospitais para simular (tem precedência sobre `NUM_HOSPITALS`) | `1,2,3,4,5,6,7,8,9,10` |
 | `ANOMALY_CHANCE` | Probabilidade por hora de um ativo saudável sofrer anomalia física | `0.13` (13%) |
 
 ---

@@ -25,3 +25,17 @@ Para rodar todo o ecossistema (Kafka, MinIO/S3, PostgreSQL Serving DB, Data Pipe
 * **Apache Kafka Broker**: `localhost:29092`
 
 ---
+
+## 🔧 Configuração e Customização da Simulação
+
+Você pode parametrizar a velocidade da simulação e a quantidade de hospitais monitorados diretamente editando o arquivo `monitoring_service/docker-compose.yml` sob a seção de `environment` do serviço `monitoring_service`:
+
+*   **`SIMULATION_INTERVAL_SEC`**: Controla a frequência de geração da telemetria. Define quantos segundos reais duram 1 hora simulada.
+    *   `3600.0` (Padrão): Modo de **Tempo Real** (1 hora simulada = 1 hora real). Cada equipamento publica uma leitura a cada hora real.
+    *   `5.0` (ou menor): Modo **Acelerado** (1 hora simulada = 5 segundos reais). Ideal para testes rápidos locais, gerando dados em alta velocidade.
+*   **`NUM_HOSPITALS`**: Controla a quantidade de hospitais simulados concorrentemente.
+    *   Se definido como `10` (padrão), gera telemetrias em paralelo para os hospitais com IDs de 1 a 10.
+    *   Se alterado para `5`, simulará apenas os hospitais de 1 a 5.
+
+---
+

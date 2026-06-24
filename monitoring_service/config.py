@@ -21,9 +21,14 @@ class Config:
     
     # Support multiple hospitals
     HOSPITAL_ID = int(os.getenv("HOSPITAL_ID", "1"))
+    
+    num_hospitals_env = os.getenv("NUM_HOSPITALS")
     hospital_ids_env = os.getenv("HOSPITAL_IDS")
+    
     if hospital_ids_env:
         HOSPITAL_IDS = [int(x.strip()) for x in hospital_ids_env.split(",") if x.strip()]
+    elif num_hospitals_env:
+        HOSPITAL_IDS = list(range(1, int(num_hospitals_env) + 1))
     else:
         HOSPITAL_IDS = list(range(1, 11))
     
