@@ -16,8 +16,9 @@ class Config:
     SIMULATION_DB_PATH = os.getenv("SIMULATION_DB_PATH", str(BASE_DIR / "persistence" / "simulation.db"))
     CSV_PATH = os.getenv("CSV_PATH", "c:/Dev/database/csv_export/equipamentos.csv")
     
-    # Simulation Settings
-    SIMULATION_INTERVAL_SEC = float(os.getenv("SIMULATION_INTERVAL_SEC", "5.0"))
+    # Segundos reais = 1 hora simulada.
+    # Default alinhado ao docker-compose (60). Tempo real: 3600. Teste rápido: 5.
+    SIMULATION_INTERVAL_SEC = float(os.getenv("SIMULATION_INTERVAL_SEC", "60.0"))
     
     # Support multiple hospitals
     HOSPITAL_ID = int(os.getenv("HOSPITAL_ID", "1"))

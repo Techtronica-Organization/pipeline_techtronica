@@ -49,17 +49,6 @@ def process_once(worker_id: str, client: BackendWebhookClient) -> int:
                 history = load_history(session, equipamento_id=row.equipamento_id, up_to=row.timestamp)
                 result = predict_for_event(tipo=row.tipo, current_row=current, history_rows=history)
 
-                # COMPLETED antes do webhook: senão o poll reprocessa e duplica Falha/Chamado.
-                mark_completed(
-                    session,
-                    row,
-                    model_slug=result.model_slug,
-                    model_version=result.model_version,
-                    preprocessing_version=result.preprocessing_version or PREPROCESSING_VERSION,
-                    remote_falha_id=None,
-                    remote_chamado_id=None,
-                )
-
                 remote_falha_id = None
                 remote_chamado_id = None
                 if result.failure_detected:
@@ -77,10 +66,17 @@ def process_once(worker_id: str, client: BackendWebhookClient) -> int:
                     remote = client.post_prediction_result(payload)
                     remote_falha_id = remote.get("falha_id")
                     remote_chamado_id = remote.get("chamado_id")
-                    if remote_falha_id is not None or remote_chamado_id is not None:
-                        row.remote_falha_id = remote_falha_id
-                        row.remote_chamado_id = remote_chamado_id
-                        session.commit()
+
+                # COMPLETED só após webhook ok (backend idempotente por event_id).
+                mark_completed(
+                    session,
+                    row,
+                    model_slug=result.model_slug,
+                    model_version=result.model_version,
+                    preprocessing_version=result.preprocessing_version or PREPROCESSING_VERSION,
+                    remote_falha_id=remote_falha_id,
+                    remote_chamado_id=remote_chamado_id,
+                )
 
                 processed += 1
             except Exception as e:

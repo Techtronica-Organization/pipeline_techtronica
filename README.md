@@ -79,8 +79,8 @@ Principais:
 
 No `docker-compose.yml` (serviço de monitoramento):
 
-- `SIMULATION_INTERVAL_SEC=3600` → tempo real; `5` → acelerado para teste
-- `NUM_HOSPITALS=10` → hospitais 1..N
+- `SIMULATION_INTERVAL_SEC=60` (default compose/config) → demo; `5` → teste rápido; `3600` → tempo real
+- `NUM_HOSPITALS` — hospitais 1..N
 
 ## Modelos
 

@@ -38,6 +38,7 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - TELEMETRY_TOPIC=telemetry
       - FAILURES_TOPIC=failures
+      # Segundos reais por 1h simulada. Default 60 (demo). Tempo real: 3600. Teste rápido: 5.
       - SIMULATION_INTERVAL_SEC=${SIMULATION_INTERVAL_SEC:-60.0}
       - HOSPITAL_ID=1
       - NUM_HOSPITALS=10
