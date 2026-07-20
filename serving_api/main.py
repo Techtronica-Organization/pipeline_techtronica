@@ -6,13 +6,13 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from data_pipeline.database.models import GoldEquipmentFeatures, SilverTelemetry
+from data_pipeline.production_checks import assert_pipeline_production_ready
 from serving_api.database.connection import get_db
 from serving_api.internal_auth import (
     TelemetryActivationRequest,
     TelemetryActivationResponse,
     verify_internal_token,
 )
-from serving_api.production_checks import assert_pipeline_production_ready
 
 
 @asynccontextmanager

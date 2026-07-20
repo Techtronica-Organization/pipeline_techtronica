@@ -17,7 +17,6 @@ def _looks_weak(value: str) -> bool:
 
 
 def assert_pipeline_production_ready(*, role: str = "serving") -> None:
-    """role: serving | worker | full"""
     if not is_prod_pipeline():
         return
     errors: list[str] = []

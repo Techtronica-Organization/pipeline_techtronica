@@ -7,6 +7,7 @@ import time
 import uuid
 
 from data_pipeline.database.connection import SessionLocal, init_sql_db
+from data_pipeline.production_checks import assert_pipeline_production_ready
 from prediction_worker.registry import PREPROCESSING_VERSION
 from prediction_worker.repository import (
     claim_pending_batch,
@@ -18,7 +19,6 @@ from prediction_worker.repository import (
 )
 from prediction_worker.runner import predict_for_event
 from prediction_worker.webhook_client import BackendWebhookClient
-from serving_api.production_checks import assert_pipeline_production_ready
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("prediction_worker")
