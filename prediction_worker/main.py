@@ -49,7 +49,7 @@ def process_once(worker_id: str, client: BackendWebhookClient) -> int:
                 history = load_history(session, equipamento_id=row.equipamento_id, up_to=row.timestamp)
                 result = predict_for_event(tipo=row.tipo, current_row=current, history_rows=history)
 
-                # Marca COMPLETED antes do webhook para não reprocessar (duplicar Falha/Chamado).
+                # COMPLETED antes do webhook: senão o poll reprocessa e duplica Falha/Chamado.
                 mark_completed(
                     session,
                     row,
