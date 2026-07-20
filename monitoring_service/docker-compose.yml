@@ -55,8 +55,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: admin
-      MINIO_ROOT_PASSWORD: strongpassword123
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-strongpassword123}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
@@ -83,14 +83,15 @@ services:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - TELEMETRY_TOPIC=telemetry
       - S3_ENDPOINT_URL=http://minio:9000
-      - S3_ACCESS_KEY=admin
-      - S3_SECRET_KEY=strongpassword123
-      - DB_USER=postgres
-      - DB_PASSWORD=strongpassword123
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER:-admin}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-strongpassword123}
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=serving_db
+      - DB_NAME=${POSTGRES_DB:-serving_db}
       - USE_POSTGRES=true
+      - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - PYTHONUNBUFFERED=1
     healthcheck:
       test:
@@ -109,9 +110,9 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: strongpassword123
-      POSTGRES_DB: serving_db
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword123}
+      POSTGRES_DB: ${POSTGRES_DB:-serving_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -134,13 +135,14 @@ services:
       data_pipeline:
         condition: service_healthy
     environment:
-      - DB_USER=postgres
-      - DB_PASSWORD=strongpassword123
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=serving_db
+      - DB_NAME=${POSTGRES_DB:-serving_db}
       - USE_POSTGRES=true
       - PYTHONUNBUFFERED=1
+      - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - PIPELINE_INTERNAL_TOKEN=${PIPELINE_INTERNAL_TOKEN:-dev-pipeline-internal-token}
       - SIMULATION_DB_PATH=/app/monitoring_service/persistence/simulation.db
       - CSV_PATH=/app/csv_export/equipamentos.csv
@@ -169,13 +171,14 @@ services:
       data_pipeline:
         condition: service_healthy
     environment:
-      - DB_USER=postgres
-      - DB_PASSWORD=strongpassword123
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_NAME=serving_db
+      - DB_NAME=${POSTGRES_DB:-serving_db}
       - USE_POSTGRES=true
       - MODELS_DIR=/app/models
+      - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - BACKEND_API_BASE_URL=${BACKEND_API_BASE_URL:-http://host.docker.internal:8000}
       - TELEMETRY_WEBHOOK_SECRET=${TELEMETRY_WEBHOOK_SECRET:-dev-telemetry-webhook-secret}
       - PREDICTION_POLL_INTERVAL_SEC=${PREDICTION_POLL_INTERVAL_SEC:-10}

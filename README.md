@@ -90,6 +90,25 @@ Artefatos em `pipeline_techtronica/models/` (ex.: `best_model_tc.pkl`). O worker
 
 Integração regressão + webhook: `feature/main/regression-models-integration`.
 
+## Produção (`PIPELINE_ENV=prod`)
+
+No `.env` do `monitoring_service`:
+
+```env
+PIPELINE_ENV=prod
+POSTGRES_PASSWORD=<forte>
+MINIO_ROOT_PASSWORD=<forte>
+PIPELINE_INTERNAL_TOKEN=<forte, igual ao backend>
+TELEMETRY_WEBHOOK_SECRET=<forte, igual ao backend>
+BACKEND_API_BASE_URL=https://api.seudominio.com
+```
+
+Boot da serving API e do prediction_worker **falha** se secrets forem fracos.
+
+- Rotas `/api/v1/*` (exceto `/health`) exigem header `X-Internal-Token`
+- Webhook ao backend envia **HMAC** (`X-Webhook-Timestamp` + `X-Webhook-Signature`) + secret legado
+- No backend: `WEBHOOK_REQUIRE_SIGNATURE=1`, `WEBHOOK_ALLOW_LEGACY_SECRET=0`, secrets alinhados
+
 ## Testes rápidos
 
 ```bash

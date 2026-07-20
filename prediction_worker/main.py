@@ -18,6 +18,7 @@ from prediction_worker.repository import (
 )
 from prediction_worker.runner import predict_for_event
 from prediction_worker.webhook_client import BackendWebhookClient
+from serving_api.production_checks import assert_pipeline_production_ready
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("prediction_worker")
@@ -104,6 +105,7 @@ def main() -> None:
     worker_id = os.getenv("WORKER_ID") or f"{socket.gethostname()}-{uuid.uuid4().hex[:8]}"
     interval = float(os.getenv("PREDICTION_POLL_INTERVAL_SEC", "10"))
     logger.info("Iniciando prediction_worker id=%s", worker_id)
+    assert_pipeline_production_ready(role="worker")
     init_sql_db()
     client = BackendWebhookClient()
     process_once(worker_id, client)

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 
 import httpx
+
+from prediction_worker.webhook_signing import webhook_auth_headers
 
 
 class BackendWebhookClient:
@@ -21,8 +24,9 @@ class BackendWebhookClient:
         if not self.secret:
             raise RuntimeError("TELEMETRY_WEBHOOK_SECRET nao configurado")
         url = f"{self.base_url}/api/v1/internal/webhooks/telemetry-prediction-result"
-        headers = {"X-Webhook-Secret": self.secret, "Content-Type": "application/json"}
+        raw = json.dumps(payload, default=str).encode("utf-8")
+        headers = webhook_auth_headers(self.secret, raw)
         with httpx.Client(timeout=self.timeout_sec) as client:
-            response = client.post(url, json=payload, headers=headers)
+            response = client.post(url, content=raw, headers=headers)
             response.raise_for_status()
             return response.json()

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import hmac
 import os
-from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Header, HTTPException, status
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 def verify_internal_token(x_internal_token: str | None = Header(None, alias="X-Internal-Token")):
@@ -14,7 +15,9 @@ def verify_internal_token(x_internal_token: str | None = Header(None, alias="X-I
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="PIPELINE_INTERNAL_TOKEN nao configurado",
         )
-    if not x_internal_token or x_internal_token != expected:
+    provided = (x_internal_token or "").encode("utf-8")
+    target = expected.encode("utf-8")
+    if len(provided) != len(target) or not hmac.compare_digest(provided, target):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token interno invalido")
 
 
