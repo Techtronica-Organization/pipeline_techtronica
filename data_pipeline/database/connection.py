@@ -26,35 +26,84 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 def init_sql_db():
-    """
-    Creates all tables if they do not exist.
-    """
-    from data_pipeline.database.models import SilverTelemetry, GoldEquipmentFeatures
-    from sqlalchemy import text
-    
-    # 1. Run create_all first to ensure all physical tables exist
+    from data_pipeline.database.models import StgSilverTelemetry, GoldEquipmentFeatures
+    from sqlalchemy import text, inspect
+
     Base.metadata.create_all(bind=engine)
-    
-    # 2. Drop silver_telemetry table and replace it with a view pointing to stg_silver_telemetry
+
+    processing_columns = {
+        "event_id": "VARCHAR(64)",
+        "numero_serie": "VARCHAR(100)",
+        "processing_status": "VARCHAR(32) DEFAULT 'PENDING' NOT NULL",
+        "processing_started_at": "TIMESTAMP",
+        "processing_finished_at": "TIMESTAMP",
+        "next_attempt_at": "TIMESTAMP",
+        "attempt_count": "INTEGER DEFAULT 0 NOT NULL",
+        "last_error": "TEXT",
+        "model_slug": "VARCHAR(64)",
+        "model_version": "VARCHAR(64)",
+        "preprocessing_version": "VARCHAR(64)",
+        "remote_falha_id": "INTEGER",
+        "remote_chamado_id": "INTEGER",
+        "lease_until": "TIMESTAMP",
+        "worker_id": "VARCHAR(128)",
+    }
+
     with engine.begin() as conn:
+        inspector = inspect(engine)
+        if "stg_silver_telemetry" in inspector.get_table_names():
+            existing = {col["name"] for col in inspector.get_columns("stg_silver_telemetry")}
+            for col_name, col_type in processing_columns.items():
+                if col_name not in existing:
+                    conn.execute(
+                        text(f"ALTER TABLE stg_silver_telemetry ADD COLUMN {col_name} {col_type}")
+                    )
+            conn.execute(
+                text(
+                    "UPDATE stg_silver_telemetry SET processing_status = 'PENDING' "
+                    "WHERE processing_status IS NULL OR processing_status = ''"
+                )
+            )
+            if engine.dialect.name == "postgresql":
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_processing_status "
+                        "ON stg_silver_telemetry (processing_status)"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_next_attempt "
+                        "ON stg_silver_telemetry (next_attempt_at)"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_numero_serie "
+                        "ON stg_silver_telemetry (numero_serie)"
+                    )
+                )
+
         if engine.dialect.name == "postgresql":
-            # If silver_telemetry is a BASE TABLE, drop it
-            conn.execute(text("""
-                DO $$
-                BEGIN
-                    IF EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_schema = 'public' 
-                          AND table_name = 'silver_telemetry' 
-                          AND table_type = 'BASE TABLE'
-                    ) THEN
-                        DROP TABLE public.silver_telemetry CASCADE;
-                    END IF;
-                END $$;
-            """))
+            conn.execute(
+                text(
+                    """
+                    DO $$
+                    BEGIN
+                        IF EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                              AND table_name = 'silver_telemetry'
+                              AND table_type = 'BASE TABLE'
+                        ) THEN
+                            DROP TABLE public.silver_telemetry CASCADE;
+                        END IF;
+                    END $$;
+                    """
+                )
+            )
             conn.execute(text("CREATE OR REPLACE VIEW silver_telemetry AS SELECT * FROM stg_silver_telemetry;"))
         else:
-            # SQLite fallback (testing/offline dev)
             res = conn.execute(text("SELECT type FROM sqlite_master WHERE name='silver_telemetry';")).fetchone()
             if res and res[0] == "table":
                 conn.execute(text("DROP TABLE silver_telemetry;"))

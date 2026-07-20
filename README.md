@@ -18,8 +18,11 @@ Para rodar todo o ecossistema (Kafka, MinIO/S3, PostgreSQL Serving DB, Data Pipe
 
 ## 📡 Portas e Serviços Expostos
 
-* **FastAPI Serving API**: `http://localhost:8000`
-  * Documentação interativa (Swagger UI): `http://localhost:8000/docs`
+* **FastAPI Serving API**: `http://localhost:8100`
+  * Documentação interativa (Swagger UI): `http://localhost:8100/docs`
+  * Ativação interna de telemetria: `PUT /internal/v1/equipments/{numero_serie}/telemetry`
+* **Prediction worker**: consome `stg_silver_telemetry` (`PENDING`), executa `.pkl` por tipo e chama webhook do backend
+* **Modelos**: `pipeline_techtronica/models/`
 * **MinIO Console (S3/Data Lake)**: `http://localhost:9001` (Usuário: `admin` | Senha: `strongpassword123`)
 * **PostgreSQL (Serving DB)**: `localhost:5432` (Usuário: `postgres` | Senha: `strongpassword123` | Banco: `serving_db`)
 * **Apache Kafka Broker**: `localhost:29092`

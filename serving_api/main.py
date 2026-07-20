@@ -3,6 +3,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Dict, Any
 from serving_api.database.connection import get_db
+from serving_api.internal_auth import (
+    TelemetryActivationRequest,
+    TelemetryActivationResponse,
+    verify_internal_token,
+)
 from data_pipeline.database.models import SilverTelemetry, GoldEquipmentFeatures
 
 app = FastAPI(
@@ -11,11 +16,45 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+@app.put(
+    "/internal/v1/equipments/{numero_serie}/telemetry",
+    response_model=TelemetryActivationResponse,
+    dependencies=[Depends(verify_internal_token)],
+)
+def activate_equipment_telemetry(numero_serie: str, body: TelemetryActivationRequest):
+    from monitoring_service.persistence import db as sim_db
+    from monitoring_service.equipment_types import simulator_tipo_to_slug
+
+    try:
+        sim_db.init_db()
+        eq = sim_db.upsert_telemetry_equipment(
+            numero_serie=numero_serie,
+            tipo=body.tipo,
+            modelo=body.modelo,
+            fabricante=body.fabricante,
+            hospital_id=body.hospital_id,
+            telemetry_enabled=body.telemetry_enabled,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Falha ao ativar telemetria: {e}",
+        ) from e
+
+    return TelemetryActivationResponse(
+        numero_serie=eq["numero_serie"],
+        tipo=eq["tipo"],
+        tipo_slug=simulator_tipo_to_slug(eq["tipo"]),
+        equipamento_id=int(eq["equipamento_id"]),
+        telemetry_enabled=bool(eq.get("telemetry_enabled", True)),
+    )
+
+
 @app.get("/api/v1/health")
 def health_check(db: Session = Depends(get_db)):
-    """
-    Checks database connectivity and service health.
-    """
     try:
         db.execute(text("SELECT 1"))
         return {"status": "healthy", "database": "connected"}
