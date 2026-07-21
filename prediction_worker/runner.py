@@ -61,6 +61,10 @@ def predict_for_event(
         probability = 1.0 if str(pred) in {"1", "True", "true"} else 0.0
 
     failure_detected = probability >= spec.threshold
+    rounded_features = {
+        name: (round(float(val), 6) if isinstance(val, (int, float, np.floating)) else val)
+        for name, val in feature_map.items()
+    }
     return PredictionResult(
         failure_detected=failure_detected,
         probability=probability,
@@ -71,5 +75,21 @@ def predict_for_event(
             "threshold": spec.threshold,
             "artifact": Path(spec.path).name,
             "algorithm": bundle.get("algorithm"),
+            "features": rounded_features,
+            "sensors_current": {
+                key: current_row.get(key)
+                for key in sorted(current_row.keys())
+                if key
+                not in {
+                    "id",
+                    "event_id",
+                    "numero_serie",
+                    "tipo",
+                    "timestamp",
+                    "processing_status",
+                    "remote_falha_id",
+                }
+                and not str(key).startswith("_")
+            },
         },
     )

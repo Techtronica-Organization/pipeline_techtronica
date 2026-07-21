@@ -109,15 +109,22 @@ Boot da serving API e do prediction_worker **falha** se secrets forem fracos.
 - Webhook ao backend envia **HMAC** (`X-Webhook-Timestamp` + `X-Webhook-Signature`) + secret legado
 - No backend: `WEBHOOK_REQUIRE_SIGNATURE=1`, `WEBHOOK_ALLOW_LEGACY_SECRET=0`, secrets alinhados
 
-## Testes rápidos
+## Testes
 
 ```bash
-# na raiz do pipeline (com deps do worker)
-# pytest prediction_worker/tests
+# na raiz do pipeline
+pip install pytest
+pytest prediction_worker/tests -q
+
+# scripts offline (não precisam da stack completa)
+python monitoring_service/test_simulation.py
+python data_pipeline/test_pipeline.py
 ```
 
-Health serving (com stack no ar):
+Health da serving API (stack no ar):
 
 ```bash
 curl http://localhost:8100/api/v1/health
 ```
+
+O `prediction_worker` inclui em `details.features` o **mapa completo** de features da inferência (usado pelo backend/MLOps).
