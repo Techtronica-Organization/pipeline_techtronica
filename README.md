@@ -60,10 +60,33 @@ docker compose up -d --build
 | Serviço | URL / porta |
 |---------|-------------|
 | Serving API | http://localhost:8100 — docs `/docs` |
+| External Data API (mock integração) | http://localhost:8200 — `GET /health` |
 | Ativar telemetria | `PUT /internal/v1/equipments/{numero_serie}/telemetry` (token interno) |
 | MinIO console | http://localhost:9001 (`admin` / `strongpassword123`) |
 | PostgreSQL serving | `localhost:5432` (`postgres` / `strongpassword123` / `serving_db`) |
 | Kafka | `localhost:29092` |
+
+### API externa mock (`external_data_api`)
+
+Usada pelo backend em `POST /api/v1/integrations/.../sync` (não misturar com `PIPELINE_INTERNAL_TOKEN` da serving).
+
+| Método | Path | Auth | Resposta |
+|--------|------|------|----------|
+| `POST` | `/auth/token` | body `{api_key, api_secret}` | `{access_token, token_type, expires_in}` |
+| `GET` | `/v1/datasets/{part}` | Bearer | `{part, items:[...]}` |
+| `GET` | `/health` | livre | `{status:"ok"}` |
+
+Parts: `hospitais`, `tecnicos`, `equipamentos`, `falhas`, `chamados`, `acoes`  
+(dados de `csv_export/`; `manutencao.csv` → part `acoes`).
+
+Env (`.env.example`): `EXTERNAL_DATA_API_PORT=8200`, `EXTERNAL_API_KEY`, `EXTERNAL_API_SECRET`, `EXTERNAL_JWT_SECRET`.
+
+Testes:
+
+```bash
+# na raiz do repo pipeline
+PYTHONPATH=. python -m unittest external_data_api.test_external_data_api
+```
 
 ### Variáveis (ver `.env.example`)
 
@@ -75,6 +98,7 @@ Principais:
 - `TELEMETRY_WEBHOOK_SECRET` — webhook para o backend (igual ao backend)
 - `BACKEND_API_BASE_URL` — onde o prediction_worker posta o resultado
 - `SIMULATION_INTERVAL_SEC` / `NUM_HOSPITALS` — ritmo e escala do simulador (também no `docker-compose.yml`)
+- `EXTERNAL_API_KEY` / `EXTERNAL_API_SECRET` / `EXTERNAL_JWT_SECRET` — mock de integração (:8200)
 
 ### Simulação
 
