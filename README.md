@@ -10,6 +10,7 @@ Simula/ingere telemetria de equipamentos, materializa no serving DB (PostgreSQL)
 | `data_pipeline` | Bronze → Silver → Gold / serving |
 | `serving_api` (:8100) | API interna (ativar telemetria por `numero_serie`) |
 | `prediction_worker` | Lê telemetria `PENDING`, prediz, chama webhook do backend |
+| `external_data_api` (:8200) | Mock de API externa (token + datasets CSV) para sync do backend |
 | `models/` | Artefatos `.pkl` por tipo de equipamento |
 
 ## Integração com o backend

@@ -190,6 +190,32 @@ services:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
+  external_data_api:
+    build:
+      context: ..
+      dockerfile: external_data_api/Dockerfile
+    ports:
+      - "${EXTERNAL_DATA_API_PORT:-8200}:8000"
+    environment:
+      - EXTERNAL_API_KEY=${EXTERNAL_API_KEY:-dev-external-api-key}
+      - EXTERNAL_API_SECRET=${EXTERNAL_API_SECRET:-dev-external-api-secret}
+      - EXTERNAL_JWT_SECRET=${EXTERNAL_JWT_SECRET:-dev-external-jwt-secret}
+      - CSV_EXPORT_DIR=/app/csv_export
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ../csv_export:/app/csv_export:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   kafka_data:
