@@ -77,20 +77,19 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      postgres:
-        condition: service_healthy
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - TELEMETRY_TOPIC=telemetry
       - S3_ENDPOINT_URL=http://minio:9000
       - S3_ACCESS_KEY=${MINIO_ROOT_USER:-admin}
       - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD:-strongpassword123}
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-serving_db}
-      - USE_POSTGRES=true
+      - DB_DIALECT=${DB_DIALECT:-mysql+pymysql}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-supersenha}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-techtronica_pipeline}
+      - USE_SQL_DB=true
       - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - PYTHONUNBUFFERED=1
     healthcheck:
@@ -103,24 +102,9 @@ services:
       timeout: 5s
       retries: 12
       start_period: 20s
-    restart: unless-stopped
-
-  postgres:
-    image: postgres:15-alpine
-    ports:
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-strongpassword123}
-      POSTGRES_DB: ${POSTGRES_DB:-serving_db}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d serving_db"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-      start_period: 10s
+    networks:
+      - default
+      - techtronica-network
     restart: unless-stopped
 
   serving_api:
@@ -130,17 +114,16 @@ services:
     ports:
       - "${PIPELINE_API_PORT:-8100}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
       data_pipeline:
         condition: service_healthy
     environment:
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-serving_db}
-      - USE_POSTGRES=true
+      - DB_DIALECT=${DB_DIALECT:-mysql+pymysql}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-supersenha}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-techtronica_pipeline}
+      - USE_SQL_DB=true
       - PYTHONUNBUFFERED=1
       - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - PIPELINE_INTERNAL_TOKEN=${PIPELINE_INTERNAL_TOKEN:-dev-pipeline-internal-token}
@@ -149,6 +132,9 @@ services:
     volumes:
       - ./persistence:/app/monitoring_service/persistence
       - ../csv_export:/app/csv_export:ro
+    networks:
+      - default
+      - techtronica-network
     healthcheck:
       test:
         [
@@ -166,17 +152,16 @@ services:
       context: ..
       dockerfile: prediction_worker/Dockerfile
     depends_on:
-      postgres:
-        condition: service_healthy
       data_pipeline:
         condition: service_healthy
     environment:
-      - DB_USER=${POSTGRES_USER:-postgres}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-strongpassword123}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-serving_db}
-      - USE_POSTGRES=true
+      - DB_DIALECT=${DB_DIALECT:-mysql+pymysql}
+      - DB_USER=${DB_USER:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-supersenha}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-techtronica_pipeline}
+      - USE_SQL_DB=true
       - MODELS_DIR=/app/models
       - PIPELINE_ENV=${PIPELINE_ENV:-dev}
       - BACKEND_API_BASE_URL=${BACKEND_API_BASE_URL:-http://host.docker.internal:8000}
@@ -188,6 +173,9 @@ services:
       - PYTHONUNBUFFERED=1
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks:
+      - default
+      - techtronica-network
     restart: unless-stopped
 
   external_data_api:
@@ -204,6 +192,9 @@ services:
       - PYTHONUNBUFFERED=1
     volumes:
       - ../csv_export:/app/csv_export:ro
+    networks:
+      - default
+      - techtronica-network
     healthcheck:
       test:
         [
@@ -217,8 +208,11 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   kafka_data:
   minio_data:
 
-
+networks:
+  default:
+  techtronica-network:
+    external: true
+    name: techtronica-network

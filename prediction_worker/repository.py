@@ -100,6 +100,40 @@ def claim_pending_batch(
         session.commit()
         return rows
 
+    if session.bind and session.bind.dialect.name == "mysql":
+        result = session.execute(
+            text(
+                """
+                SELECT timestamp, equipamento_id
+                FROM stg_silver_telemetry
+                WHERE processing_status = 'PENDING'
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= :now)
+                ORDER BY timestamp ASC
+                LIMIT :limit
+                FOR UPDATE SKIP LOCKED
+                """
+            ),
+            {"now": now, "limit": batch_size},
+        )
+        keys = list(result.fetchall())
+        if not keys:
+            return []
+        rows: list[StgSilverTelemetry] = []
+        for ts, eq_id in keys:
+            row = (
+                session.query(StgSilverTelemetry)
+                .filter_by(timestamp=ts, equipamento_id=eq_id)
+                .one()
+            )
+            row.processing_status = "PROCESSING"
+            row.processing_started_at = now
+            row.lease_until = lease_until
+            row.worker_id = worker_id
+            row.attempt_count = int(row.attempt_count or 0) + 1
+            rows.append(row)
+        session.commit()
+        return rows
+
     candidates = (
         session.query(StgSilverTelemetry)
         .filter(

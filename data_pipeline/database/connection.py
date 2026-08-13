@@ -1,24 +1,17 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from data_pipeline.database.url import ensure_database_exists, sqlalchemy_database_url
 
-# Database configuration environment variables
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "strongpassword123")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "serving_db")
+USE_SQL_DB = os.getenv("USE_SQL_DB", os.getenv("USE_POSTGRES", "false")).lower() == "true" or os.getenv("DB_HOST") is not None
 
-# Detect if we should use PostgreSQL or fallback to SQLite for offline testing/development
-USE_POSTGRES = os.getenv("USE_POSTGRES", "false").lower() == "true" or os.getenv("DB_HOST") is not None
-
-if USE_POSTGRES:
-    DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    # Postgres engine parameters
-    engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20)
+if USE_SQL_DB:
+    ensure_database_exists()
+    DATABASE_URL = sqlalchemy_database_url()
+    engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20, pool_pre_ping=True)
 else:
     # Local SQLite fallback for host-based integration testing
-    sqlite_path = Path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "serving_database.db"))
+    sqlite_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "serving_database.db"))
     DATABASE_URL = f"sqlite:///{sqlite_path}"
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
@@ -64,25 +57,36 @@ def init_sql_db():
                     "WHERE processing_status IS NULL OR processing_status = ''"
                 )
             )
-            if engine.dialect.name == "postgresql":
-                conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_processing_status "
-                        "ON stg_silver_telemetry (processing_status)"
+            if engine.dialect.name in ("postgresql", "mysql"):
+                existing_indexes = {idx["name"] for idx in inspector.get_indexes("stg_silver_telemetry")}
+                if engine.dialect.name == "mysql":
+                    index_statements = [
+                        ("ix_stg_silver_processing_status", "processing_status"),
+                        ("ix_stg_silver_next_attempt", "next_attempt_at"),
+                        ("ix_stg_silver_numero_serie", "numero_serie"),
+                    ]
+                    for idx_name, col_name in index_statements:
+                        if idx_name not in existing_indexes:
+                            conn.execute(text(f"CREATE INDEX {idx_name} ON stg_silver_telemetry ({col_name})"))
+                else:
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_stg_silver_processing_status "
+                            "ON stg_silver_telemetry (processing_status)"
+                        )
                     )
-                )
-                conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_next_attempt "
-                        "ON stg_silver_telemetry (next_attempt_at)"
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_stg_silver_next_attempt "
+                            "ON stg_silver_telemetry (next_attempt_at)"
+                        )
                     )
-                )
-                conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS ix_stg_silver_numero_serie "
-                        "ON stg_silver_telemetry (numero_serie)"
+                    conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS ix_stg_silver_numero_serie "
+                            "ON stg_silver_telemetry (numero_serie)"
+                        )
                     )
-                )
 
         if engine.dialect.name == "postgresql":
             conn.execute(
@@ -103,6 +107,10 @@ def init_sql_db():
                 )
             )
             conn.execute(text("CREATE OR REPLACE VIEW silver_telemetry AS SELECT * FROM stg_silver_telemetry;"))
+        elif engine.dialect.name == "mysql":
+            conn.execute(text("DROP VIEW IF EXISTS silver_telemetry"))
+            conn.execute(text("DROP TABLE IF EXISTS silver_telemetry"))
+            conn.execute(text("CREATE VIEW silver_telemetry AS SELECT * FROM stg_silver_telemetry"))
         else:
             res = conn.execute(text("SELECT type FROM sqlite_master WHERE name='silver_telemetry';")).fetchone()
             if res and res[0] == "table":

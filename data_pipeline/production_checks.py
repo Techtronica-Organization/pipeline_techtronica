@@ -24,7 +24,7 @@ def assert_pipeline_production_ready(*, role: str = "serving") -> None:
         errors.append("PIPELINE_INTERNAL_TOKEN fraco ou ausente")
     db_pass = (os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD") or "").strip()
     if _looks_weak(db_pass):
-        errors.append("DB_PASSWORD/POSTGRES_PASSWORD fraco ou ausente")
+        errors.append("DB_PASSWORD fraco ou ausente")
     if role in ("worker", "full"):
         if _looks_weak(os.getenv("TELEMETRY_WEBHOOK_SECRET") or ""):
             errors.append("TELEMETRY_WEBHOOK_SECRET fraco ou ausente")

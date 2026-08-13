@@ -8,6 +8,92 @@ from data_pipeline.config import Config
 from data_pipeline.storage.s3_client import get_s3_client
 from monitoring_service.simulators.base import LIMITES_FISICOS
 
+
+def _timestamp_for_sql(value):
+    ts = pd.to_datetime(value).round("s")
+    if hasattr(ts, "to_pydatetime"):
+        ts = ts.to_pydatetime()
+    return ts.replace(tzinfo=None) if getattr(ts, "tzinfo", None) else ts
+
+
+def _upsert_silver_telemetry(session, values):
+    from data_pipeline.database.models import StgSilverTelemetry
+
+    if not values:
+        return
+
+    dialect = session.bind.dialect.name if session.bind is not None else ""
+    table = StgSilverTelemetry.__table__
+    preserved_on_duplicate = {
+        "timestamp",
+        "equipamento_id",
+        "event_id",
+        "processing_status",
+        "processing_started_at",
+        "processing_finished_at",
+        "next_attempt_at",
+        "attempt_count",
+        "last_error",
+        "model_slug",
+        "model_version",
+        "preprocessing_version",
+        "remote_falha_id",
+        "remote_chamado_id",
+        "lease_until",
+        "worker_id",
+    }
+
+    update_cols = [key for key in values[0] if key not in preserved_on_duplicate]
+
+    if dialect == "mysql":
+        from sqlalchemy.dialects.mysql import insert
+
+        stmt = insert(table).values(values)
+        stmt = stmt.on_duplicate_key_update(
+            **{col: getattr(stmt.inserted, col) for col in update_cols}
+        )
+        session.execute(stmt)
+        return
+
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+
+        stmt = insert(table).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["timestamp", "equipamento_id"],
+            set_={col: getattr(stmt.excluded, col) for col in update_cols},
+        )
+        session.execute(stmt)
+        return
+
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+
+        stmt = insert(table).values(values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["timestamp", "equipamento_id"],
+            set_={col: getattr(stmt.excluded, col) for col in update_cols},
+        )
+        session.execute(stmt)
+        return
+
+    for item in values:
+        rec = session.query(StgSilverTelemetry).filter_by(
+            timestamp=item["timestamp"],
+            equipamento_id=item["equipamento_id"],
+        ).first()
+        is_new = rec is None
+        if not rec:
+            rec = StgSilverTelemetry(timestamp=item["timestamp"], equipamento_id=item["equipamento_id"])
+            session.add(rec)
+        for key, val in item.items():
+            if key in ("timestamp", "equipamento_id"):
+                continue
+            if not is_new and key in preserved_on_duplicate:
+                continue
+            setattr(rec, key, val)
+
+
 def get_silver_s3_path(hospital_id, tipo_eq, date_obj):
     """
     Returns the Silver bucket object key format.
@@ -45,6 +131,8 @@ def process_bronze_to_silver(hospital_id, equipamento_id, tipo_eq, new_telemetry
         "is_interpolated": False
     }
     for k, v in sensors.items():
+        if str(k).startswith("_"):
+            continue
         row_data[k] = float(v)
         
     df_new = pd.DataFrame([row_data])
@@ -130,41 +218,34 @@ def process_bronze_to_silver(hospital_id, equipamento_id, tipo_eq, new_telemetry
         print(f"Erro ao salvar no bucket Silver: {e}")
         
     # 3. Synchronize with Serving SQL Database
+    session = None
     try:
         import uuid
         from data_pipeline.database.connection import get_db_session
         from data_pipeline.database.models import StgSilverTelemetry
 
         session = get_db_session()
-        msg_ts = pd.to_datetime(new_telemetry_msg["timestamp"]).to_pydatetime()
+        allowed_sql_columns = {col.key for col in StgSilverTelemetry.__table__.columns}
+        msg_ts = _timestamp_for_sql(new_telemetry_msg["timestamp"])
         msg_event_id = new_telemetry_msg.get("event_id")
         msg_serie = new_telemetry_msg.get("numero_serie") or f"SN-{int(equipamento_id)}"
+        values = []
 
         for _, row in df_eq.iterrows():
-            ts = row["timestamp"]
-            if hasattr(ts, "to_pydatetime"):
-                ts = ts.to_pydatetime()
+            ts = _timestamp_for_sql(row["timestamp"])
             eq_id = int(row["equipamento_id"])
-
-            rec = session.query(StgSilverTelemetry).filter_by(timestamp=ts, equipamento_id=eq_id).first()
-            is_new = rec is None
-            if not rec:
-                rec = StgSilverTelemetry(timestamp=ts, equipamento_id=eq_id)
-                session.add(rec)
-
-            rec.hospital_id = int(hospital_id)
-            rec.tipo = tipo_eq
-            rec.is_interpolated = bool(row["is_interpolated"])
-            rec.numero_serie = msg_serie
-            if not rec.event_id:
-                if ts == msg_ts and msg_event_id:
-                    rec.event_id = msg_event_id
-                else:
-                    rec.event_id = str(uuid.uuid4())
-            if is_new or not rec.processing_status:
-                rec.processing_status = "PENDING"
-                rec.next_attempt_at = ts
-                rec.attempt_count = 0
+            item = {
+                "timestamp": ts,
+                "equipamento_id": eq_id,
+                "hospital_id": int(hospital_id),
+                "tipo": tipo_eq,
+                "is_interpolated": bool(row["is_interpolated"]),
+                "numero_serie": msg_serie,
+                "event_id": msg_event_id if ts == msg_ts and msg_event_id else str(uuid.uuid4()),
+                "processing_status": "PENDING",
+                "next_attempt_at": ts,
+                "attempt_count": 0,
+            }
 
             skip_cols = {
                 "timestamp",
@@ -187,7 +268,7 @@ def process_bronze_to_silver(hospital_id, equipamento_id, tipo_eq, new_telemetry
                 "worker_id",
             }
             for col in df_eq.columns:
-                if col in skip_cols:
+                if col in skip_cols or col.startswith("_") or col not in allowed_sql_columns:
                     continue
                 val = row[col]
                 if pd.isna(val):
@@ -196,10 +277,18 @@ def process_bronze_to_silver(hospital_id, equipamento_id, tipo_eq, new_telemetry
                     val = int(round(val))
                 else:
                     val = float(val)
-                setattr(rec, col, val)
+                item[col] = val
+            values.append(item)
+        _upsert_silver_telemetry(session, values)
         session.commit()
         session.close()
     except Exception as e:
+        if session is not None:
+            try:
+                session.rollback()
+                session.close()
+            except Exception:
+                pass
         print(f"Erro ao sincronizar Silver para o banco SQL: {e}")
 
     return df_eq

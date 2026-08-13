@@ -2,11 +2,12 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 from serving_api.config import Config
+from data_pipeline.database.url import ensure_database_exists, sqlalchemy_database_url
 
-# DB URL resolution
-if Config.USE_POSTGRES:
-    DATABASE_URL = f"postgresql://{Config.DB_USER}:{Config.DB_PASSWORD}@{Config.DB_HOST}:{Config.DB_PORT}/{Config.DB_NAME}"
-    engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=10)
+if Config.USE_SQL_DB:
+    ensure_database_exists()
+    DATABASE_URL = sqlalchemy_database_url()
+    engine = create_engine(DATABASE_URL, pool_size=5, max_overflow=10, pool_pre_ping=True)
 else:
     # Fallback to local SQLite file for offline testing / development
     sqlite_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "serving_database.db"))

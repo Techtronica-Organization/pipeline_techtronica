@@ -1,6 +1,6 @@
 # Pipeline de Telemetria Hospitalar
 
-Simula/ingere telemetria de equipamentos, materializa no serving DB (PostgreSQL), roda **modelos de regressão/classificação** (`.pkl`) e notifica o **techtronica_web_backend** quando detecta falha.
+Simula/ingere telemetria de equipamentos, materializa no serving DB (MySQL por padrao), roda **modelos de regressão/classificação** (`.pkl`) e notifica o **techtronica_web_backend** quando detecta falha.
 
 ## Propósito
 
@@ -41,16 +41,33 @@ Backend cria Falha + Chamado e pode enfileirar recomendação MLOps
 |----------|---------|
 | `TELEMETRY_WEBHOOK_SECRET` | `TELEMETRY_WEBHOOK_SECRET` |
 | `PIPELINE_INTERNAL_TOKEN` | `PIPELINE_INTERNAL_TOKEN` |
-| `BACKEND_API_BASE_URL` | URL da API (ex. `http://host.docker.internal:8000`) |
+| `BACKEND_API_BASE_URL` | URL da API na rede Docker (ex. `http://techtronica-backend:8000`) |
+
+**Banco de dados:**
+
+O pipeline usa o servidor MySQL do `techtronica_web_backend`, mas cria e gerencia um banco separado: `techtronica_pipeline`. As tabelas e views do pipeline continuam sendo responsabilidade deste projeto.
 
 ## Como rodar
 
-Pré-requisito: Docker Desktop. Backend Techtrônica preferencialmente no ar em `:8000`.
+Pré-requisito: Docker Desktop. Antes de subir o pipeline, suba o MySQL do `techtronica_web_backend` na rede `techtronica-network`.
 
 ```bash
-cd monitoring_service
+cd ../techtronica_web_backend
+docker compose --env-file backend/.env up -d mysql
+
+cd ../pipeline_techtronica/monitoring_service
 cp .env.example .env   # ajuste secrets se necessário
-docker compose up -d --build
+docker compose --env-file .env up -d --build
+```
+
+Se o backend tambem for receber webhooks do pipeline, deixe a API do backend no ar na mesma rede Docker.
+
+```bash
+cd ../techtronica_web_backend
+docker compose --env-file backend/.env up -d backend
+
+cd ../pipeline_techtronica/monitoring_service
+docker compose --env-file .env up -d --build
 ```
 
 (Use `docker compose` v2; `docker-compose` legado também funciona.)
@@ -63,7 +80,7 @@ docker compose up -d --build
 | External Data API (mock integração) | http://localhost:8200 — `GET /health` |
 | Ativar telemetria | `PUT /internal/v1/equipments/{numero_serie}/telemetry` (token interno) |
 | MinIO console | http://localhost:9001 (`admin` / `strongpassword123`) |
-| PostgreSQL serving | `localhost:5432` (`postgres` / `strongpassword123` / `serving_db`) |
+| MySQL compartilhado | serviço Docker `mysql:3306`, banco `techtronica_pipeline` |
 | Kafka | `localhost:29092` |
 
 ### API externa mock (`external_data_api`)
@@ -97,6 +114,7 @@ Principais:
 - `PIPELINE_INTERNAL_TOKEN` — auth da serving API (igual ao backend)
 - `TELEMETRY_WEBHOOK_SECRET` — webhook para o backend (igual ao backend)
 - `BACKEND_API_BASE_URL` — onde o prediction_worker posta o resultado
+- `DB_DIALECT` / `DB_HOST` / `DB_NAME` — conexao SQL do pipeline; default `mysql+pymysql`, `mysql`, `techtronica_pipeline`
 - `SIMULATION_INTERVAL_SEC` / `NUM_HOSPITALS` — ritmo e escala do simulador (também no `docker-compose.yml`)
 - `EXTERNAL_API_KEY` / `EXTERNAL_API_SECRET` / `EXTERNAL_JWT_SECRET` — mock de integração (:8200)
 
@@ -121,7 +139,12 @@ No `.env` do `monitoring_service`:
 
 ```env
 PIPELINE_ENV=prod
-POSTGRES_PASSWORD=<forte>
+DB_DIALECT=mysql+pymysql
+DB_USER=<usuario_mysql>
+DB_PASSWORD=<forte>
+DB_HOST=<host_mysql>
+DB_PORT=3306
+DB_NAME=techtronica_pipeline
 MINIO_ROOT_PASSWORD=<forte>
 PIPELINE_INTERNAL_TOKEN=<forte, igual ao backend>
 TELEMETRY_WEBHOOK_SECRET=<forte, igual ao backend>
