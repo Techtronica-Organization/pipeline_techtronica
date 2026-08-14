@@ -1,8 +1,10 @@
 import time
 import random
 import sys
+import uuid
 from datetime import datetime, timedelta
 from monitoring_service.config import Config
+from monitoring_service.equipment_types import simulator_tipo_to_slug
 from monitoring_service.utils import logger
 from monitoring_service.kafka.producer import KafkaProducerWrapper
 from monitoring_service.persistence import db
@@ -146,13 +148,15 @@ def run_simulation():
                 # Format clean telemetry for Kafka (only observable sensors)
                 telemetry_payload = formatar_parametros(tipo_eq, estado_fisico)
                 
-                # Publish telemetry to Kafka
                 telemetry_msg = {
+                    "event_id": str(uuid.uuid4()),
                     "timestamp": sim_time_str,
                     "hospital_id": h_id,
                     "equipamento_id": eq_id,
+                    "numero_serie": eq.get("numero_serie") or f"SN-{eq_id}",
                     "tipo": tipo_eq,
-                    "telemetria": telemetry_payload
+                    "tipo_slug": simulator_tipo_to_slug(tipo_eq),
+                    "telemetria": telemetry_payload,
                 }
                 producer.send_message(Config.TELEMETRY_TOPIC, telemetry_msg)
                 

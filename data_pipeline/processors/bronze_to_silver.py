@@ -131,39 +131,75 @@ def process_bronze_to_silver(hospital_id, equipamento_id, tipo_eq, new_telemetry
         
     # 3. Synchronize with Serving SQL Database
     try:
+        import uuid
         from data_pipeline.database.connection import get_db_session
         from data_pipeline.database.models import StgSilverTelemetry
+
         session = get_db_session()
+        msg_ts = pd.to_datetime(new_telemetry_msg["timestamp"]).to_pydatetime()
+        msg_event_id = new_telemetry_msg.get("event_id")
+        msg_serie = new_telemetry_msg.get("numero_serie") or f"SN-{int(equipamento_id)}"
+
         for _, row in df_eq.iterrows():
             ts = row["timestamp"]
             if hasattr(ts, "to_pydatetime"):
                 ts = ts.to_pydatetime()
             eq_id = int(row["equipamento_id"])
-            
-            # Find or create record
+
             rec = session.query(StgSilverTelemetry).filter_by(timestamp=ts, equipamento_id=eq_id).first()
+            is_new = rec is None
             if not rec:
                 rec = StgSilverTelemetry(timestamp=ts, equipamento_id=eq_id)
                 session.add(rec)
-            
-            # Populate fields
+
             rec.hospital_id = int(hospital_id)
             rec.tipo = tipo_eq
             rec.is_interpolated = bool(row["is_interpolated"])
-            
+            rec.numero_serie = msg_serie
+            if not rec.event_id:
+                if ts == msg_ts and msg_event_id:
+                    rec.event_id = msg_event_id
+                else:
+                    rec.event_id = str(uuid.uuid4())
+            if is_new or not rec.processing_status:
+                rec.processing_status = "PENDING"
+                rec.next_attempt_at = ts
+                rec.attempt_count = 0
+
+            skip_cols = {
+                "timestamp",
+                "equipamento_id",
+                "is_interpolated",
+                "event_id",
+                "numero_serie",
+                "processing_status",
+                "processing_started_at",
+                "processing_finished_at",
+                "next_attempt_at",
+                "attempt_count",
+                "last_error",
+                "model_slug",
+                "model_version",
+                "preprocessing_version",
+                "remote_falha_id",
+                "remote_chamado_id",
+                "lease_until",
+                "worker_id",
+            }
             for col in df_eq.columns:
-                if col not in ("timestamp", "equipamento_id", "is_interpolated"):
-                    val = row[col]
-                    if pd.isna(val):
-                        val = None
-                    elif col in ("scan_count", "exposure_count", "minutes_since_injection"):
-                        val = int(round(val))
-                    else:
-                        val = float(val)
-                    setattr(rec, col, val)
+                if col in skip_cols:
+                    continue
+                val = row[col]
+                if pd.isna(val):
+                    val = None
+                elif col in ("scan_count", "exposure_count", "minutes_since_injection"):
+                    val = int(round(val))
+                else:
+                    val = float(val)
+                setattr(rec, col, val)
         session.commit()
         session.close()
     except Exception as e:
         print(f"Erro ao sincronizar Silver para o banco SQL: {e}")
-        
+
     return df_eq
