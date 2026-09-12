@@ -52,8 +52,8 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-12-18T13-15-44Z
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-strongpassword123}
@@ -62,10 +62,10 @@ services:
       - minio_data:/data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
+      interval: 5s
+      timeout: 7s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
   data_pipeline:
@@ -179,6 +179,7 @@ services:
       - USE_POSTGRES=true
       - MODELS_DIR=/app/models
       - PIPELINE_ENV=${PIPELINE_ENV:-dev}
+      - PIPELINE_INTERNAL_TOKEN=${PIPELINE_INTERNAL_TOKEN:-dev-pipeline-internal-token}
       - BACKEND_API_BASE_URL=${BACKEND_API_BASE_URL:-http://host.docker.internal:8000}
       - TELEMETRY_WEBHOOK_SECRET=${TELEMETRY_WEBHOOK_SECRET:-dev-telemetry-webhook-secret}
       - PREDICTION_POLL_INTERVAL_SEC=${PREDICTION_POLL_INTERVAL_SEC:-10}
